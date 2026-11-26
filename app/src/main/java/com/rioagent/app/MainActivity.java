@@ -26,6 +26,8 @@ public class MainActivity extends Activity {
     private static final int REQUEST_CAPTURE=4102;
     private static final int BG=0xFF081321,PANEL=0xFF122337,PANEL2=0xFF192F46,CYAN=0xFF32D6E5,WHITE=0xFFF2F7FC,MUTED=0xFF9DB1C5;
     private TextView statusText,controlText,autoText,recorderStatus;
+    private Button stopRecordingButton;
+    private boolean ignoringStopButtonTouch=false;
     private EditText moveX,moveY,moveToX,moveToY,punchX,punchY,jumpX,jumpY;
     private final Handler automationHandler=new Handler(Looper.getMainLooper());
     private boolean receiverRegistered=false,autoRunning=false;
@@ -97,7 +99,7 @@ public class MainActivity extends Activity {
         page.addView(section("مسجّل الحركات"));
         recorderStatus=card("جاهز للتسجيل. فعّل خدمة إمكانية الوصول أولاً.");page.addView(recorderStatus,match());
         addButton(page,"●  بدء تسجيل حركاتي",this::startRecording,true);
-        addButton(page,"■  إيقاف التسجيل وحفظه",()->{
+        stopRecordingButton=addButton(page,"■  إيقاف التسجيل وحفظه",()->{
             String saved=TouchRecorder.stopAndSave(this);
             recorderStatus.setText(saved.isEmpty()?"لم تُحفظ حركات. تحقق من وصول أحداث اللمس أثناء التسجيل.":"تم حفظ التسجيل: "+saved);
         },false);
@@ -143,7 +145,40 @@ public class MainActivity extends Activity {
     }
 
     private void startRecording(){
-        recorderStatus.setText("تم إيقاف التسجيل مؤقتاً في إصدار Safe Touch لحماية استجابة شاشة الهاتف. ستعود الميزة بعد اعتماد طريقة تسجيل آمنة.");
+        if (TouchRecorder.isRecording()) {
+            recorderStatus.setText("التسجيل يعمل بالفعل.");
+            return;
+        }
+        TouchRecorder.start(screenWidth(), screenHeight());
+        recorderStatus.setText("التسجيل يعمل داخل RIOAgent. لن يسجل لمس التطبيقات الأخرى.");
+    }
+
+    private boolean isInsideStopButton(float x,float y) {
+        if(stopRecordingButton==null || stopRecordingButton.getWidth()==0)return false;
+        int[] pos=new int[2];
+        stopRecordingButton.getLocationOnScreen(pos);
+        return x>=pos[0] && x<=pos[0]+stopRecordingButton.getWidth()
+            && y>=pos[1] && y<=pos[1]+stopRecordingButton.getHeight();
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+        if(event==null)return super.dispatchTouchEvent(event);
+        int action=event.getActionMasked();
+        if(action==android.view.MotionEvent.ACTION_DOWN)
+            ignoringStopButtonTouch=isInsideStopButton(event.getRawX(),event.getRawY());
+
+        if(!ignoringStopButtonTouch && TouchRecorder.isRecording()) {
+            android.view.MotionEvent copy=android.view.MotionEvent.obtain(event);
+            copy.offsetLocation(event.getRawX()-event.getX(),event.getRawY()-event.getY());
+            TouchRecorder.onMotionEvent(copy);
+            copy.recycle();
+        }
+
+        boolean handled=super.dispatchTouchEvent(event);
+        if(action==android.view.MotionEvent.ACTION_UP || action==android.view.MotionEvent.ACTION_CANCEL)
+            ignoringStopButtonTouch=false;
+        return handled;
     }
     private void showRecordings(){
         java.util.ArrayList<TouchRecorder.RecordingInfo> list=TouchRecorder.listRecordings(this);
@@ -204,10 +239,11 @@ public class MainActivity extends Activity {
     private TextView section(String s){TextView v=label(s,18,CYAN,true);v.setPadding(0,dp(20),0,dp(8));return v;}
     private TextView card(String s){TextView v=label(s,14,WHITE,false);v.setPadding(dp(14),dp(14),dp(14),dp(14));v.setBackground(round(PANEL,dp(14)));return v;}
     private TextView label(String s,int size,int color,boolean bold){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(color);if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
-    private void addButton(LinearLayout page,String text,Runnable action,boolean primary){
+    private Button addButton(LinearLayout page,String text,Runnable action,boolean primary){
         Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(14);b.setTextColor(primary?0xFF06151F:WHITE);
         b.setBackground(round(primary?CYAN:PANEL2,dp(12)));b.setOnClickListener(v->action.run());
         LinearLayout.LayoutParams p=match();p.height=dp(52);page.addView(b,p);
+        return b;
     }
     private GradientDrawable round(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(radius);if(color==PANEL2)d.setStroke(dp(1),0xFF29445D);return d;}
     private LinearLayout.LayoutParams match(){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(8);return p;}
