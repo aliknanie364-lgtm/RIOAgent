@@ -20,6 +20,6 @@ jobs:
       - run: gradle assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: RIOAgent-1.3-debug-APK
+          name: RIOAgent-1.4-debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

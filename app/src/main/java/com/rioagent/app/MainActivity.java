@@ -26,6 +26,7 @@ public class MainActivity extends Activity {
     private boolean receiverRegistered = false;
     private boolean autoRunning = false;
     private int autoCycles = 0;
+    private android.content.SharedPreferences preferences;
 
     private final BroadcastReceiver captureReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
@@ -54,8 +55,11 @@ public class MainActivity extends Activity {
                 float[] punch = point(punchX, punchY);
                 float[] jump = point(jumpX, jumpY);
 
-                // Short, bounded action cycle. It is a user-configured macro, not AI.
-                GameControlService.swipe(move[0], move[1], moveEnd[0], moveEnd[1], 650);
+                // The service serializes gestures, preventing overlapping dispatchGesture calls.
+                if (!GameControlService.swipe(move[0], move[1], moveEnd[0], moveEnd[1], 650)) {
+                    stopAutomation("تعذر إرسال الحركة؛ تحقق من الإحداثيات أو صلاحية التحكم");
+                    return;
+                }
                 automationHandler.postDelayed(() -> {
                     if (!autoRunning) return;
                     GameControlService.tap(punch[0], punch[1], 65);
@@ -63,8 +67,8 @@ public class MainActivity extends Activity {
                         if (!autoRunning) return;
                         GameControlService.tap(jump[0], jump[1], 65);
                         autoCycles++;
-                        if (autoText != null) autoText.setText("الأتمتة التجريبية تعمل — الدورات: " + autoCycles
-                            + "\nاضغط إيقاف فوراً إذا تحركت الشخصية بشكل غير مناسب.");
+                        if (autoText != null) autoText.setText("التسلسل يعمل — الدورات: " + autoCycles
+                            + "\nالحركة تُرسل بالتتابع لمنع تداخل اللمسات.");
                         automationHandler.postDelayed(this, 450);
                     }, 180);
                 }, 180);
@@ -76,6 +80,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        preferences = getSharedPreferences("rioagent_settings", MODE_PRIVATE);
         buildUi();
     }
 
@@ -91,12 +96,18 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onStop() {
-        stopAutomation("توقفت الأتمتة عند مغادرة واجهة RIOAgent");
+        // Do not stop the macro here: Android calls onStop when the user switches to the game.
+        saveSettings();
         if (receiverRegistered) {
             unregisterReceiver(captureReceiver);
             receiverRegistered = false;
         }
         super.onStop();
+    }
+
+    @Override protected void onDestroy() {
+        saveSettings();
+        super.onDestroy();
     }
 
     @Override protected void onResume() {
@@ -117,7 +128,7 @@ public class MainActivity extends Activity {
         page.setBackgroundColor(0xFFF3F5F9);
 
         TextView title = new TextView(this);
-        title.setText("RIOAgent 1.3");
+        title.setText("RIOAgent 1.4");
         title.setTextSize(26);
         title.setGravity(Gravity.CENTER);
         title.setTextColor(0xFF14213D);
@@ -139,30 +150,30 @@ public class MainActivity extends Activity {
             boolean sent = GameControlService.tap(
                 getResources().getDisplayMetrics().widthPixels / 2f,
                 getResources().getDisplayMetrics().heightPixels / 2f, 90);
-            statusText.setText(sent ? "تم إرسال النقرة التجريبية" : "تعذر إرسال النقرة: تحقق من صلاحية التحكم");
+            statusText.setText(sent ? "تمت إضافة النقرة إلى قائمة التحكم" : "تعذر إرسال النقرة: تحقق من صلاحية التحكم");
         });
         addButton(page, "سحب تجريبي من اليسار إلى اليمين", v -> {
             float width = getResources().getDisplayMetrics().widthPixels;
             float height = getResources().getDisplayMetrics().heightPixels;
             boolean sent = GameControlService.swipe(width * .25f, height * .7f,
                 width * .75f, height * .7f, 350);
-            statusText.setText(sent ? "تم إرسال السحب التجريبي" : "تعذر إرسال السحب: تحقق من صلاحية التحكم");
+            statusText.setText(sent ? "تمت إضافة السحب إلى قائمة التحكم" : "تعذر إرسال السحب: تحقق من صلاحية التحكم");
         });
 
         TextView autoTitle = new TextView(this);
-        autoTitle.setText("التحكم التلقائي التجريبي — اضبط إحداثيات أزرار لعبتك");
+        autoTitle.setText("التحكم التلقائي القابل للضبط");
         autoTitle.setTextSize(18);
         autoTitle.setTextColor(0xFF14213D);
         autoTitle.setPadding(0, dp(12), 0, dp(6));
         page.addView(autoTitle, match());
 
-        page.addView(card("الإحداثيات كنسبة مئوية من الشاشة: 0 إلى 100. القيم الافتراضية تقريبية للعرض الأفقي، ويجب معايرتها للعبتك."), match());
-        moveX = addNumber(page, "مركز عصا الحركة X", "10");
-        moveY = addNumber(page, "مركز عصا الحركة Y", "82");
-        moveToX = addNumber(page, "اتجاه الحركة X", "18");
-        moveToY = addNumber(page, "اتجاه الحركة Y", "82");
+        page.addView(card("أدخل مواقع الأزرار كنسبة مئوية من الشاشة (0–100). تُحفظ الإعدادات تلقائياً. ابدأ بمعايرة كل زر داخل اللعبة."), match());
+        moveX = addNumber(page, "مركز عصا الحركة X", "25");
+        moveY = addNumber(page, "مركز عصا الحركة Y", "72");
+        moveToX = addNumber(page, "اتجاه الحركة X", "31");
+        moveToY = addNumber(page, "اتجاه الحركة Y", "72");
         punchX = addNumber(page, "زر الضرب X", "84");
-        punchY = addNumber(page, "زر الضرب Y", "65");
+        punchY = addNumber(page, "زر الضرب Y", "67");
         jumpX = addNumber(page, "زر القفز X", "91");
         jumpY = addNumber(page, "زر القفز Y", "78");
 
@@ -176,7 +187,7 @@ public class MainActivity extends Activity {
         page.addView(stop, match());
 
         TextView warning = new TextView(this);
-        warning.setText("مهم: هذا الإصدار يضيف تسلسلاً آلياً قابلاً للضبط (حركة ثم ضرب ثم قفز)، وليس ذكاءً اصطناعياً يفهم أهداف اللعبة أو يقرر الفوز. الكشف البصري ML Kit عام ولا يتعرف تلقائياً على عناصر RIO RISE. لا تستخدم الأتمتة قبل معايرة الإحداثيات، وابقَ مستعداً لإيقافها.");
+        warning.setText("ملاحظة: التسلسل الحالي ما زال ماكرو ثابتاً (حركة ثم ضرب ثم قفز)، وليس لاعباً يفهم أحداث اللعبة. لا تفترض أن زر القفز موجود؛ عدّل إحداثياته أو لا تشغّل التسلسل إذا لم تستخدمه. عند الانتقال إلى اللعبة يبقى التسلسل نشطاً؛ ارجع إلى RIOAgent واضغط إيقاف للطوارئ عند الحاجة.");
         warning.setTextColor(0xFF7A4B00);
         warning.setTextSize(14);
         warning.setPadding(0, dp(12), 0, dp(10));
@@ -202,11 +213,25 @@ public class MainActivity extends Activity {
         EditText field = new EditText(this);
         field.setSingleLine(true);
         field.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        field.setText(value);
+        field.setText(preferences.getString(label, value));
         field.setTextSize(16);
         field.setPadding(dp(10), 0, dp(10), 0);
         page.addView(field, match());
         return field;
+    }
+
+    private void saveSettings() {
+        if (preferences == null) return;
+        android.content.SharedPreferences.Editor e = preferences.edit();
+        save(e, "مركز عصا الحركة X", moveX); save(e, "مركز عصا الحركة Y", moveY);
+        save(e, "اتجاه الحركة X", moveToX); save(e, "اتجاه الحركة Y", moveToY);
+        save(e, "زر الضرب X", punchX); save(e, "زر الضرب Y", punchY);
+        save(e, "زر القفز X", jumpX); save(e, "زر القفز Y", jumpY);
+        e.apply();
+    }
+
+    private void save(android.content.SharedPreferences.Editor e, String key, EditText field) {
+        if (field != null) e.putString(key, field.getText().toString());
     }
 
     private float[] point(EditText xField, EditText yField) {
@@ -228,9 +253,10 @@ public class MainActivity extends Activity {
         try {
             point(moveX, moveY); point(moveToX, moveToY);
             point(punchX, punchY); point(jumpX, jumpY);
+            saveSettings();
             autoRunning = true;
             autoCycles = 0;
-            autoText.setText("بدأ التسلسل التجريبي — اضغط إيقاف للطوارئ");
+            autoText.setText("بدأ التسلسل — انتقل إلى اللعبة، وسيبقى نشطاً بالخلفية.");
             automationHandler.post(autoStep);
         } catch (Exception e) {
             autoText.setText("تحقق من الإحداثيات: " + e.getMessage());
@@ -240,6 +266,7 @@ public class MainActivity extends Activity {
     private void stopAutomation(String reason) {
         autoRunning = false;
         automationHandler.removeCallbacksAndMessages(null);
+        GameControlService.clearPendingGestures();
         if (autoText != null) autoText.setText(reason);
     }
 
