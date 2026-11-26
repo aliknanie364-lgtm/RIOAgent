@@ -117,7 +117,7 @@ public class MainActivity extends Activity {
         page.setBackgroundColor(0xFFF3F5F9);
 
         TextView title = new TextView(this);
-        title.setText("RIOAgent 1.3");
+        title.setText("RIOAgent 1.6");
         title.setTextSize(26);
         title.setGravity(Gravity.CENTER);
         title.setTextColor(0xFF14213D);
