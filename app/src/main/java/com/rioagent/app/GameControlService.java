@@ -4,13 +4,10 @@ import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.graphics.Path;
 import android.os.Build;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.accessibility.AccessibilityEvent;
 
 public class GameControlService extends AccessibilityService {
     private static volatile GameControlService instance;
-    private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override public void onServiceConnected() {
         super.onServiceConnected();
@@ -22,7 +19,6 @@ public class GameControlService extends AccessibilityService {
 
     @Override public void onDestroy() {
         if (instance == this) instance = null;
-        handler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
 
@@ -34,7 +30,7 @@ public class GameControlService extends AccessibilityService {
         Path path = new Path();
         path.moveTo(x, y);
         GestureDescription gesture = new GestureDescription.Builder()
-            .addStroke(new GestureDescription.StrokeDescription(path, 0, Math.max(40, durationMs)))
+            .addStroke(new GestureDescription.StrokeDescription(path, 0, Math.max(40, Math.min(durationMs, 1000))))
             .build();
         return s.dispatchGesture(gesture, null, null);
     }
@@ -46,7 +42,7 @@ public class GameControlService extends AccessibilityService {
         path.moveTo(x1, y1);
         path.lineTo(x2, y2);
         GestureDescription gesture = new GestureDescription.Builder()
-            .addStroke(new GestureDescription.StrokeDescription(path, 0, Math.max(80, durationMs)))
+            .addStroke(new GestureDescription.StrokeDescription(path, 0, Math.max(80, Math.min(durationMs, 3000))))
             .build();
         return s.dispatchGesture(gesture, null, null);
     }

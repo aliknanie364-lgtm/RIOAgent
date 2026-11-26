@@ -1,5 +1,18 @@
-# RIOAgent 1.2.0
-Android app with user-approved screen capture, on-device generic ML Kit object detection, and user-triggered Accessibility gestures (tap/swipe).
+# RIOAgent 1.3.0
 
-Enable the RIOAgent accessibility service manually in Android Settings. Gestures only occur after the user presses the test controls. Automatic gameplay policy/AI is not implemented: game-specific controls and decision rules must be calibrated and validated against the actual game.
-Build with JDK 17 and Gradle 8.9: `gradle assembleDebug`.
+Android Java application for:
+- User-approved MediaProjection screen capture.
+- On-device generic ML Kit object detection.
+- Live display of capture and detection status in the activity.
+- User-triggered Accessibility tap and swipe tests.
+- A user-started, user-configurable repeated macro: joystick drag, punch tap, jump tap.
+- Immediate stop control; automation stops when the app activity leaves the foreground.
+
+## Important limitations
+The repeated macro is NOT autonomous game AI. It does not understand RIO RISE objectives, enemies, missions, health, obstacles, or success states. The ML Kit detector is generic and is not trained for RIO RISE. Coordinates must be calibrated manually for the device orientation and game UI. Test in a safe area and keep the emergency stop available.
+
+## Build
+JDK 17 and Gradle 8.9:
+`gradle assembleDebug`
+
+GitHub Actions builds a debug APK artifact on pushes to `main`.
