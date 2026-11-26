@@ -1,12 +1,9 @@
 package com.rioagent.app;
 
 import android.accessibilityservice.AccessibilityService;
-import android.accessibilityservice.AccessibilityServiceInfo;
 import android.accessibilityservice.GestureDescription;
 import android.graphics.Path;
 import android.os.Build;
-import android.view.InputDevice;
-import android.view.MotionEvent;
 import android.view.accessibility.AccessibilityEvent;
 
 public class GameControlService extends AccessibilityService {
@@ -16,27 +13,15 @@ public class GameControlService extends AccessibilityService {
     public void onServiceConnected() {
         super.onServiceConnected();
         instance = this;
-        if (Build.VERSION.SDK_INT >= 34) {
-            AccessibilityServiceInfo info = getServiceInfo();
-            if (info != null) {
-                info.setMotionEventSources(InputDevice.SOURCE_TOUCHSCREEN);
-                setServiceInfo(info);
-            }
-        }
     }
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {}
 
     @Override
-    public void onMotionEvent(MotionEvent event) {
-        if (Build.VERSION.SDK_INT >= 34) {
-            TouchRecorder.onMotionEvent(event);
-        }
+    public void onInterrupt() {
+        if (instance == this) instance = null;
     }
-
-    @Override
-    public void onInterrupt() {}
 
     @Override
     public void onDestroy() {

@@ -137,10 +137,7 @@ public class MainActivity extends Activity {
     }
 
     private void startRecording(){
-        if(Build.VERSION.SDK_INT<34){recorderStatus.setText("التسجيل يتطلب Android 14 أو أحدث.");return;}
-        if(!GameControlService.isReady()){recorderStatus.setText("فعّل خدمة إمكانية الوصول أولاً.");return;}
-        TouchRecorder.start(screenWidth(),screenHeight());
-        recorderStatus.setText("● التسجيل جارٍ. نفّذ الحركات في التطبيق الآخر ثم عُد واضغط إيقاف وحفظ.");
+        recorderStatus.setText("تم إيقاف التسجيل مؤقتاً في إصدار Safe Touch لحماية استجابة شاشة الهاتف. ستعود الميزة بعد اعتماد طريقة تسجيل آمنة.");
     }
     private void showRecordings(){
         java.util.ArrayList<TouchRecorder.RecordingInfo> list=TouchRecorder.listRecordings(this);
