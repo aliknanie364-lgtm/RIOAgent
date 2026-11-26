@@ -1,6 +1,10 @@
 package com.rioagent.app;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.AccessibilityServiceInfo;
+import android.content.ComponentName;
+import android.content.Context;
+import android.view.accessibility.AccessibilityManager;
 import android.accessibilityservice.GestureDescription;
 import android.graphics.Path;
 import android.os.Build;
@@ -20,7 +24,7 @@ public class GameControlService extends AccessibilityService {
 
     @Override
     public void onInterrupt() {
-        if (instance == this) instance = null;
+        // Keep the service instance; interruption does not necessarily disconnect it.
     }
 
     @Override
@@ -31,6 +35,26 @@ public class GameControlService extends AccessibilityService {
 
     public static boolean isReady() {
         return instance != null;
+    }
+
+    public static boolean isAccessibilityEnabled(Context context) {
+        if (context == null) return false;
+        AccessibilityManager manager = (AccessibilityManager)
+                context.getSystemService(Context.ACCESSIBILITY_SERVICE);
+        if (manager == null) return false;
+
+        ComponentName expected = new ComponentName(context, GameControlService.class);
+        for (AccessibilityServiceInfo info :
+                manager.getEnabledAccessibilityServiceList(
+                        AccessibilityServiceInfo.FEEDBACK_ALL_MASK)) {
+            if (info.getResolveInfo() == null ||
+                    info.getResolveInfo().serviceInfo == null) continue;
+            ComponentName actual = new ComponentName(
+                    info.getResolveInfo().serviceInfo.packageName,
+                    info.getResolveInfo().serviceInfo.name);
+            if (expected.equals(actual)) return true;
+        }
+        return false;
     }
 
     public static boolean dispatchRecorded(GestureDescription gesture) {

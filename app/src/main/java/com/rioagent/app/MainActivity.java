@@ -73,7 +73,13 @@ public class MainActivity extends Activity {
         if(receiverRegistered){unregisterReceiver(captureReceiver);receiverRegistered=false;}
         super.onStop();
     }
-    @Override protected void onResume(){super.onResume();if(controlText!=null)updateControlStatus();}
+    @Override protected void onResume(){
+        super.onResume();
+        if(controlText!=null){
+            updateControlStatus();
+            automationHandler.postDelayed(this::updateControlStatus, 700);
+        }
+    }
     @Override public void onBackPressed(){stopAutomation("تم إيقاف الأتمتة");super.onBackPressed();}
 
     private void buildUi(){
@@ -184,7 +190,15 @@ public class MainActivity extends Activity {
         }catch(Exception e){autoText.setText("تحقق من الإحداثيات: "+e.getMessage());}
     }
     private void stopAutomation(String reason){autoRunning=false;automationHandler.removeCallbacksAndMessages(null);if(autoText!=null)autoText.setText(reason);}
-    private void updateControlStatus(){controlText.setText(GameControlService.isReady()?"التحكم: مفعّل وجاهز":"التحكم: غير مفعّل — افتح إعدادات إمكانية الوصول");}
+    private void updateControlStatus(){
+        if(GameControlService.isReady()){
+            controlText.setText("التحكم: الخدمة متصلة وجاهزة");
+        }else if(GameControlService.isAccessibilityEnabled(this)){
+            controlText.setText("الصلاحية مفعّلة في Android، لكن الخدمة لم تتصل بعد. انتظر قليلاً أو أعد فتح التطبيق.");
+        }else{
+            controlText.setText("التحكم: صلاحية إمكانية الوصول غير مفعّلة");
+        }
+    }
     private int screenWidth(){return getResources().getDisplayMetrics().widthPixels;}
     private int screenHeight(){return getResources().getDisplayMetrics().heightPixels;}
     private TextView section(String s){TextView v=label(s,18,CYAN,true);v.setPadding(0,dp(20),0,dp(8));return v;}
