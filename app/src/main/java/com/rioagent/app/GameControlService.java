@@ -31,7 +31,7 @@ public class GameControlService extends AccessibilityService {
 
     public static boolean dispatchRecorded(GestureDescription gesture) {
         if (gesture == null || instance == null) return false;
-        return enqueue(new QueuedGesture(gesture, null, null));
+        return instance.dispatchGesture(gesture, null, null);
     }
 
     public static boolean tap(float x, float y, long durationMs) {
