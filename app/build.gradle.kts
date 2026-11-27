@@ -7,8 +7,8 @@ android {
         applicationId = "com.rioagent.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "2.3.0"
+        versionCode = 19
+        versionName = "2.4.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

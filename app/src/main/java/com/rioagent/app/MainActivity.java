@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ActivityInfo;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -41,7 +42,7 @@ public class MainActivity extends Activity {
     };
 
     @Override public void onCreate(Bundle b){
-        super.onCreate(b);buildUi();
+        super.onCreate(b);setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);buildUi();
         IntentFilter emergency=new IntentFilter(OverlayService.ACTION_EMERGENCY_STOP);
         if(Build.VERSION.SDK_INT>=33)registerReceiver(emergencyReceiver,emergency,Context.RECEIVER_NOT_EXPORTED);else registerReceiver(emergencyReceiver,emergency);
         emergencyReceiverRegistered=true;
@@ -79,7 +80,7 @@ public class MainActivity extends Activity {
         heroBg.setCornerRadius(dp(22));heroBg.setStroke(dp(1),0xFF286078);hero.setBackground(heroBg);
         LinearLayout brandRow=new LinearLayout(this);brandRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView brand=label("RIO",32,WHITE,true);brandRow.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
-        TextView version=label("AGENT 2.3",11,CYAN,true);version.setPadding(dp(10),dp(6),dp(10),dp(6));version.setBackground(round(0xFF173D50,dp(18)));brandRow.addView(version);hero.addView(brandRow);
+        TextView version=label("AGENT 2.4",11,CYAN,true);version.setPadding(dp(10),dp(6),dp(10),dp(6));version.setBackground(round(0xFF173D50,dp(18)));brandRow.addView(version);hero.addView(brandRow);
         TextView sub=label("AUTONOMOUS FIELD OPERATIONS",10,0xFF8CEAF0,true);sub.setPadding(0,dp(2),0,dp(10));hero.addView(sub);
         hero.addView(label("مركز القيادة والتحكم",22,WHITE,true));
         TextView desc=label("رصد الأهداف • تحليل الشاشة • تحكم باللمس",13,0xFFB6C9D8,false);desc.setPadding(0,dp(5),0,dp(12));hero.addView(desc);
@@ -112,11 +113,21 @@ public class MainActivity extends Activity {
         addButton(page,"نقرة تجريبية بمنتصف الشاشة",()->{boolean ok=GameControlService.tap(screenWidth()/2f,screenHeight()/2f,90);statusText.setText(ok?"تم إرسال النقرة التجريبية":"تعذر إرسال النقرة؛ تحقق من الصلاحية");},false);
         addButton(page,"سحب تجريبي",()->{boolean ok=GameControlService.swipe(screenWidth()*.25f,screenHeight()*.7f,screenWidth()*.75f,screenHeight()*.7f,350);statusText.setText(ok?"تم إرسال السحب التجريبي":"تعذر إرسال السحب؛ تحقق من الصلاحية");},false);
 
+        page.addView(section("اختيار نوع المهمة"));
+        page.addView(card("اختر المهمة المطلوبة. لن يبدأ الوكيل مهمة لا يستطيع تمييز أهدافها بصرياً."),match());
+        addButton(page,"🌾 الزراعة والحصاد",()->selectMission("farming","الزراعة والحصاد"),false);
+        addButton(page,"📦 توصيل الطلبات",()->selectMission("delivery","توصيل الطلبات"),false);
+        addButton(page,"🧺 جمع الموارد",()->selectMission("gathering","جمع الموارد"),false);
+        addButton(page,"🚚 نقل البضائع",()->selectMission("transport","نقل البضائع"),false);
+        addButton(page,"🧭 البحث والاستكشاف",()->selectMission("exploration","البحث والاستكشاف"),false);
+        addButton(page,"⚔ مواجهة الأعداء",()->selectMission("combat","مواجهة الأعداء"),false);
+        addButton(page,"🛡 حماية المنطقة",()->selectMission("defense","حماية المنطقة"),false);
+        addButton(page,"▶ بدء المهمة المختارة",this::startSelectedMission,true);
         page.addView(section("اللعب التلقائي التكيفي"));
         page.addView(card("يختار المحرك أقرب شريط صحة أحمر مرصود، ينعّم اتجاه المطاردة، ويعدّل الحركة والضرب والركض. يتوقف الهجوم عند فقدان الهدف."),match());
         page.addView(card("ملف التحكم الأفقي: عصا الحركة 37.1% / 94.7% • الضرب 83.6% / 67.4% • الركض 90.2% / 81.4%."),match());
         autoText=card("القيادة متوقفة — ابدأ تحليل الشاشة أولاً");page.addView(autoText,match());
-        addButton(page,"تشغيل اللعب التلقائي التكيفي",this::startAutomation,true);
+        addButton(page,"تشغيل اللعب التلقائي التكيفي",this::startSelectedMission,true);
         addButton(page,"إيقاف فوري للطوارئ",()->stopAutomation("تم الإيقاف يدوياً"),false);
 
         TextView note=label("ملاحظة: تسجيل اللمس الحالي يلتقط أحداث اللمس داخل واجهة RIOAgent فقط؛ لا يدّعي تسجيل لمسات اللعبة الخارجية.",12,MUTED,false);
@@ -191,10 +202,21 @@ public class MainActivity extends Activity {
             .setPositiveButton("حفظ",(d,w)->toast(TouchRecorder.rename(this,oldName,input.getText().toString())?"تم تغيير الاسم":"تعذر تغيير الاسم؛ الاسم مستخدم أو غير صالح")).show();
     }
 
+    private void selectMission(String id,String title){
+        AgentConfig.missionType=id;
+        if(autoText!=null) autoText.setText("المهمة المختارة: "+title+
+            ("combat".equals(id)?" — محرك كشف الأعداء متاح.":" — كاشف أهداف هذه المهمة لم يكتمل بعد."));
+    }
+    private void startSelectedMission(){
+        if(!"combat".equals(AgentConfig.missionType)){
+            autoText.setText("لم تبدأ المهمة: يلزم إكمال كاشف الأهداف الخاص بـ "+AgentConfig.missionType+
+                ". لن أحرّك الشخصية عشوائياً.");
+            return;
+        }
+        startAutomation();
+    }
     private void startAutomation(){
         if(!GameControlService.isReady()){autoText.setText("فعّل خدمة إمكانية الوصول أولاً");return;}
-        float aspect=screenWidth()/(float)Math.max(1,screenHeight());
-        if(aspect<1.75f){autoText.setText("أدر الهاتف إلى الوضع الأفقي قبل تشغيل القيادة.");return;}
         if(autoRunning)return;
         AgentConfig.controlsCalibrated=true;
         if(CaptureService.isActive()){

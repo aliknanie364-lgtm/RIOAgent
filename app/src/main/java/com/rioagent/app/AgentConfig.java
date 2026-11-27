@@ -6,6 +6,7 @@ public final class AgentConfig {
     public static final int PROCESS_WIDTH = 480;
     public static volatile boolean controlsCalibrated = true;
     public static volatile boolean autoEnabled = false;
+    public static volatile String missionType = "combat";
     // Screen-normalized controls from the user's RIO RISE screenshot (1536x681).
     public static volatile float joystickX = 0.3711f, joystickY = 0.9471f;
     public static volatile float joystickRadius = 0.052f;
