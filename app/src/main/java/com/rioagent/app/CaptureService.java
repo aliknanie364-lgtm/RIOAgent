@@ -89,7 +89,7 @@ public final class CaptureService extends Service {
                     if(stopped)return;
                     List<RedMarkerDetector.Marker> markers=markerDetector.detect(bitmap);
                     DecisionEngine.Command command=engine.decide(markers);
-                    float[] xy=new float[markers.size()*2];for(int k=0;k<markers.size();k++){xy[k*2]=markers.get(k).x;xy[k*2+1]=markers.get(k).y;}markerCoordinates=xy;
+                    float[] xy=new float[markers.size()*4];for(int k=0;k<markers.size();k++){RedMarkerDetector.Marker m=markers.get(k);int p=k*4;xy[p]=m.left/(float)Math.max(1,outW-1);xy[p+1]=m.top/(float)Math.max(1,outH-1);xy[p+2]=m.right/(float)Math.max(1,outW-1);xy[p+3]=m.bottom/(float)Math.max(1,outH-1);}markerCoordinates=xy;
                     analyzed++;state.onFrame(markers.size());state.setControls(command.steering,command.throttle);
                     runAdaptiveControl(command);
                     String mode=AgentConfig.autoEnabled?"القيادة التكيفية تعمل": "وضع الرادار — القيادة متوقفة";
