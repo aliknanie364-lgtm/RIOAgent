@@ -12,11 +12,13 @@ import android.view.accessibility.AccessibilityEvent;
 
 public class GameControlService extends AccessibilityService {
     private static volatile GameControlService instance;
+    private ContinuousTouchController continuousTouch;
 
     @Override
     public void onServiceConnected() {
         super.onServiceConnected();
         instance = this;
+        continuousTouch = new ContinuousTouchController(this);
     }
 
     @Override
@@ -24,17 +26,40 @@ public class GameControlService extends AccessibilityService {
 
     @Override
     public void onInterrupt() {
-        // Keep the service instance; interruption does not necessarily disconnect it.
+        stopContinuous();
     }
 
     @Override
     public void onDestroy() {
+        stopContinuous();
+        continuousTouch = null;
         if (instance == this) instance = null;
         super.onDestroy();
     }
 
     public static boolean isReady() {
         return instance != null;
+    }
+
+    public static boolean startContinuous(float x, float y) {
+        GameControlService s = instance;
+        if (s == null || s.continuousTouch == null) return false;
+        s.continuousTouch.start(x, y);
+        return true;
+    }
+
+    public static boolean moveContinuous(float x, float y) {
+        GameControlService s = instance;
+        if (s == null || s.continuousTouch == null
+                || !s.continuousTouch.isActive()) return false;
+        s.continuousTouch.moveTo(x, y);
+        return true;
+    }
+
+    public static void stopContinuous() {
+        GameControlService s = instance;
+        if (s != null && s.continuousTouch != null)
+            s.continuousTouch.stop();
     }
 
     public static boolean isAccessibilityEnabled(Context context) {
