@@ -68,61 +68,66 @@ public class MainActivity extends Activity {
     @Override public void onBackPressed(){stopAutomation("تم إيقاف الأتمتة");super.onBackPressed();}
 
     private void buildUi(){
+        getWindow().setStatusBarColor(0xFF07111D);
+        getWindow().setNavigationBarColor(0xFF07111D);
         LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(18),dp(18),dp(18),dp(26));page.setBackgroundColor(BG);
-        TextView brand=label("RIO",34,WHITE,true);brand.setGravity(Gravity.CENTER);page.addView(brand,match());
-        TextView sub=label("AGENT  •  TOUCH AUTOMATION",11,CYAN,true);sub.setGravity(Gravity.CENTER);page.addView(sub,match());
-        TextView tagline=label("تحكّم. سجّل. أعد التشغيل.",19,WHITE,true);tagline.setGravity(Gravity.CENTER);tagline.setPadding(0,dp(10),0,dp(14));page.addView(tagline,match());
+        page.setPadding(dp(18),dp(16),dp(18),dp(28));page.setBackgroundColor(0xFF07111D);
 
-        page.addView(section("حالة النظام"));
-        statusText=card("تحليل الشاشة: متوقف");controlText=card("التحكم: جارٍ التحقق من الصلاحية");
-        page.addView(statusText,match());page.addView(controlText,match());
+        LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setPadding(dp(18),dp(18),dp(18),dp(18));
+        GradientDrawable heroBg=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{0xFF12334A,0xFF0B1D2D,0xFF102638});
+        heroBg.setCornerRadius(dp(22));heroBg.setStroke(dp(1),0xFF286078);hero.setBackground(heroBg);
+        LinearLayout brandRow=new LinearLayout(this);brandRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView brand=label("RIO",32,WHITE,true);brandRow.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
+        TextView version=label("AGENT 2.3",11,CYAN,true);version.setPadding(dp(10),dp(6),dp(10),dp(6));version.setBackground(round(0xFF173D50,dp(18)));brandRow.addView(version);hero.addView(brandRow);
+        TextView sub=label("AUTONOMOUS FIELD OPERATIONS",10,0xFF8CEAF0,true);sub.setPadding(0,dp(2),0,dp(10));hero.addView(sub);
+        hero.addView(label("مركز القيادة والتحكم",22,WHITE,true));
+        TextView desc=label("رصد الأهداف • تحليل الشاشة • تحكم باللمس",13,0xFFB6C9D8,false);desc.setPadding(0,dp(5),0,dp(12));hero.addView(desc);
+        TextView live=label("●  SYSTEM READY  •  RIO RISE / LANDSCAPE",10,0xFF7FE5B2,true);live.setPadding(dp(10),dp(7),dp(10),dp(7));live.setBackground(round(0xFF123B38,dp(18)));hero.addView(live);
+        page.addView(hero,match());
+
+        page.addView(section("لوحة الحالة المباشرة"));
+        LinearLayout metrics=new LinearLayout(this);metrics.setOrientation(LinearLayout.HORIZONTAL);
+        metrics.addView(metric("RADAR","LIVE"),new LinearLayout.LayoutParams(0,-2,1));
+        LinearLayout.LayoutParams mid=new LinearLayout.LayoutParams(0,-2,1);mid.leftMargin=dp(7);mid.rightMargin=dp(7);
+        metrics.addView(metric("CONTROL","TOUCH"),mid);metrics.addView(metric("MODE","ADAPTIVE"),new LinearLayout.LayoutParams(0,-2,1));
+        page.addView(metrics,match());
+        statusText=card("تحليل الشاشة: متوقف\nابدأ الالتقاط لعرض الإطارات والأهداف واتجاه الحركة.");
+        controlText=card("التحكم: جارٍ التحقق من صلاحية إمكانية الوصول");page.addView(statusText,match());page.addView(controlText,match());
         addButton(page,"تفعيل صلاحية التحكم",()->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)),true);
         addButton(page,"إظهار لوحة الرادار العائمة",this::showOverlay,false);
 
-        page.addView(section("مسجّل الحركات"));
-        recorderStatus=card("جاهز للتسجيل. فعّل خدمة إمكانية الوصول أولاً.");page.addView(recorderStatus,match());
+        page.addView(section("مسجّل الحركات"));recorderStatus=card("جاهز للتسجيل. فعّل خدمة إمكانية الوصول أولاً.");page.addView(recorderStatus,match());
         addButton(page,"●  بدء تسجيل حركاتي",this::startRecording,true);
-        stopRecordingButton=addButton(page,"■  إيقاف التسجيل وحفظه",()->{
-            String saved=TouchRecorder.stopAndSave(this);
-            recorderStatus.setText(saved.isEmpty()?"لم تُحفظ حركات.":"تم حفظ التسجيل: "+saved);
-        },false);
+        stopRecordingButton=addButton(page,"■  إيقاف التسجيل وحفظه",()->{String saved=TouchRecorder.stopAndSave(this);recorderStatus.setText(saved.isEmpty()?"لم تُحفظ حركات.":"تم حفظ التسجيل: "+saved);},false);
         addButton(page,"مكتبة التسجيلات وإدارتها",this::showRecordings,false);
-        addButton(page,"تشغيل آخر تسجيل",()->{
-            if(!GameControlService.isReady()){toast("فعّل خدمة التحكم أولاً");return;}
-            boolean ok=TouchRecorder.playLatest(this,screenWidth(),screenHeight());
-            recorderStatus.setText(ok?"تم إرسال التسجيل الأخير للتشغيل.":"تعذر التشغيل؛ تحقق من وجود تسجيل محفوظ وخدمة التحكم.");
-        },false);
+        addButton(page,"تشغيل آخر تسجيل",()->{if(!GameControlService.isReady()){toast("فعّل خدمة التحكم أولاً");return;}boolean ok=TouchRecorder.playLatest(this,screenWidth(),screenHeight());recorderStatus.setText(ok?"تم إرسال التسجيل الأخير للتشغيل.":"تعذر التشغيل؛ تحقق من وجود تسجيل محفوظ وخدمة التحكم.");},false);
 
-        page.addView(section("تحليل الشاشة"));
-        addButton(page,"بدء تحليل الشاشة",()->{
-            MediaProjectionManager m=(MediaProjectionManager)getSystemService(MEDIA_PROJECTION_SERVICE);
-            startActivityForResult(m.createScreenCaptureIntent(),REQUEST_CAPTURE);
-        },false);
-        addButton(page,"إيقاف تحليل الشاشة",()->{
-            stopService(new Intent(this,CaptureService.class));statusText.setText("تحليل الشاشة: تم طلب الإيقاف");
-        },false);
+        page.addView(section("الرصد والرادار"));
+        page.addView(card("يحلّل التطبيق إطارات الشاشة بحثاً عن العلامات الحمراء، ثم يرسل إحداثياتها واتجاه التوجيه إلى الرادار العائم."),match());
+        addButton(page,"بدء تحليل الشاشة",()->{MediaProjectionManager m=(MediaProjectionManager)getSystemService(MEDIA_PROJECTION_SERVICE);startActivityForResult(m.createScreenCaptureIntent(),REQUEST_CAPTURE);},true);
+        addButton(page,"إيقاف تحليل الشاشة",()->{stopService(new Intent(this,CaptureService.class));statusText.setText("تحليل الشاشة: تم طلب الإيقاف");},false);
 
-        page.addView(section("اختبار التحكم"));
-        addButton(page,"نقرة تجريبية بمنتصف الشاشة",()->{
-            boolean ok=GameControlService.tap(screenWidth()/2f,screenHeight()/2f,90);
-            statusText.setText(ok?"تم إرسال النقرة التجريبية":"تعذر إرسال النقرة؛ تحقق من الصلاحية");
-        },false);
-        addButton(page,"سحب تجريبي",()->{
-            boolean ok=GameControlService.swipe(screenWidth()*.25f,screenHeight()*.7f,screenWidth()*.75f,screenHeight()*.7f,350);
-            statusText.setText(ok?"تم إرسال السحب التجريبي":"تعذر إرسال السحب؛ تحقق من الصلاحية");
-        },false);
+        page.addView(section("اختبار اللمس"));
+        addButton(page,"نقرة تجريبية بمنتصف الشاشة",()->{boolean ok=GameControlService.tap(screenWidth()/2f,screenHeight()/2f,90);statusText.setText(ok?"تم إرسال النقرة التجريبية":"تعذر إرسال النقرة؛ تحقق من الصلاحية");},false);
+        addButton(page,"سحب تجريبي",()->{boolean ok=GameControlService.swipe(screenWidth()*.25f,screenHeight()*.7f,screenWidth()*.75f,screenHeight()*.7f,350);statusText.setText(ok?"تم إرسال السحب التجريبي":"تعذر إرسال السحب؛ تحقق من الصلاحية");},false);
 
         page.addView(section("اللعب التلقائي التكيفي"));
-        page.addView(card("ملف تحكم RIO RISE مأخوذ من لقطة لعبك الأفقية، ويُكيّف الإحداثيات تلقائياً مع دقة الشاشة. القيادة تعتمد على رصد أشرطة صحة الأعداء الحمراء."),match());
-        page.addView(card("ملف التحكم: عصا الحركة 37.1% / 94.7% • الضرب 83.6% / 67.4% • الركض 90.2% / 81.4%. الإحداثيات تُكيّف مع دقة الشاشة الأفقية."),match());
+        page.addView(card("يختار المحرك أقرب شريط صحة أحمر مرصود، ينعّم اتجاه المطاردة، ويعدّل الحركة والضرب والركض. يتوقف الهجوم عند فقدان الهدف."),match());
+        page.addView(card("ملف التحكم الأفقي: عصا الحركة 37.1% / 94.7% • الضرب 83.6% / 67.4% • الركض 90.2% / 81.4%."),match());
         autoText=card("القيادة متوقفة — ابدأ تحليل الشاشة أولاً");page.addView(autoText,match());
         addButton(page,"تشغيل اللعب التلقائي التكيفي",this::startAutomation,true);
         addButton(page,"إيقاف فوري للطوارئ",()->stopAutomation("تم الإيقاف يدوياً"),false);
 
-        TextView note=label("ملاحظة: دقة التسجيل تعتمد على إصدار أندرويد والشركة المصنّعة وإمكانية وصول أحداث اللمس. قد لا تُلتقط بعض الإيماءات أو اللمسات المتعددة.",12,MUTED,false);
-        note.setPadding(dp(4),dp(12),dp(4),0);page.addView(note,match());
+        TextView note=label("ملاحظة: تسجيل اللمس الحالي يلتقط أحداث اللمس داخل واجهة RIOAgent فقط؛ لا يدّعي تسجيل لمسات اللعبة الخارجية.",12,MUTED,false);
+        note.setPadding(dp(4),dp(14),dp(4),0);page.addView(note,match());
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(page);setContentView(scroll);updateControlStatus();
+    }
+
+    private LinearLayout metric(String name,String value){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(10),dp(12),dp(8),dp(12));box.setBackground(round(PANEL,dp(14)));
+        box.addView(label(name,9,MUTED,true));TextView val=label(value,12,CYAN,true);val.setPadding(0,dp(5),0,0);box.addView(val);return box;
     }
 
     private boolean isInsideStopButton(float x,float y){
@@ -227,6 +232,7 @@ public class MainActivity extends Activity {
         if(result==RESULT_OK&&data!=null){
             Intent service=new Intent(this,CaptureService.class);service.putExtra(CaptureService.EXTRA_RESULT_CODE,result);service.putExtra(CaptureService.EXTRA_RESULT_DATA,data);
             if(Build.VERSION.SDK_INT>=26)startForegroundService(service);else startService(service);
+            if(Build.VERSION.SDK_INT<23 || Settings.canDrawOverlays(this)) showOverlay();
             if(pendingAutoStart){AgentConfig.autoEnabled=true;autoRunning=true;pendingAutoStart=false;if(autoText!=null)autoText.setText("القيادة التكيفية نشطة — انتقل إلى اللعبة، وسيستمر الرادار والتحكم بالخلفية.");}
             statusText.setText("تحليل الشاشة: تم منح الإذن، بانتظار أول إطار...");
         }else{pendingAutoStart=false;statusText.setText("لم تتم الموافقة على التقاط الشاشة");if(autoText!=null)autoText.setText("تم إلغاء تشغيل اللعب التلقائي.");}
