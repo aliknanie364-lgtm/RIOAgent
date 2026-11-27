@@ -9,8 +9,7 @@ import android.content.IntentFilter;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
+import android.net.Uri;
 import android.provider.Settings;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -27,11 +26,11 @@ public class MainActivity extends Activity {
     private static final int BG=0xFF081321,PANEL=0xFF122337,PANEL2=0xFF192F46,CYAN=0xFF32D6E5,WHITE=0xFFF2F7FC,MUTED=0xFF9DB1C5;
     private TextView statusText,controlText,autoText,recorderStatus;
     private Button stopRecordingButton;
-    private boolean ignoringStopButtonTouch=false;
-    private EditText moveX,moveY,moveToX,moveToY,punchX,punchY,jumpX,jumpY;
-    private final Handler automationHandler=new Handler(Looper.getMainLooper());
-    private boolean receiverRegistered=false,autoRunning=false;
-    private int autoCycles=0;
+    private boolean ignoringStopButtonTouch;
+    private boolean receiverRegistered=false,autoRunning=false,emergencyReceiverRegistered=false,pendingAutoStart=false;
+    private final BroadcastReceiver emergencyReceiver=new BroadcastReceiver(){
+        @Override public void onReceive(Context c,Intent i){ if(OverlayService.ACTION_EMERGENCY_STOP.equals(i.getAction())) stopAutomation("إيقاف طوارئ من اللوحة العائمة"); }
+    };
 
     private final BroadcastReceiver captureReceiver=new BroadcastReceiver(){
         @Override public void onReceive(Context c,Intent i){
@@ -40,28 +39,13 @@ public class MainActivity extends Activity {
             if(statusText!=null)statusText.setText("تحليل الشاشة: "+(status==null?"":status)+(analysis==null||analysis.isEmpty()?"":"\n"+analysis));
         }
     };
-    private final Runnable autoStep=new Runnable(){
-        @Override public void run(){
-            if(!autoRunning)return;
-            if(!GameControlService.isReady()){stopAutomation("خدمة التحكم غير متاحة");return;}
-            try{
-                float[] a=point(moveX,moveY),b=point(moveToX,moveToY),p=point(punchX,punchY),j=point(jumpX,jumpY);
-                GameControlService.swipe(a[0],a[1],b[0],b[1],650);
-                automationHandler.postDelayed(()->{
-                    if(!autoRunning)return;
-                    GameControlService.tap(p[0],p[1],65);
-                    automationHandler.postDelayed(()->{
-                        if(!autoRunning)return;
-                        GameControlService.tap(j[0],j[1],65);autoCycles++;
-                        if(autoText!=null)autoText.setText("التسلسل يعمل • الدورات: "+autoCycles);
-                        automationHandler.postDelayed(this,450);
-                    },180);
-                },180);
-            }catch(Exception e){stopAutomation("إعداد غير صالح: "+e.getMessage());}
-        }
-    };
 
-    @Override public void onCreate(Bundle b){super.onCreate(b);buildUi();}
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b);buildUi();
+        IntentFilter emergency=new IntentFilter(OverlayService.ACTION_EMERGENCY_STOP);
+        if(Build.VERSION.SDK_INT>=33)registerReceiver(emergencyReceiver,emergency,Context.RECEIVER_NOT_EXPORTED);else registerReceiver(emergencyReceiver,emergency);
+        emergencyReceiverRegistered=true;
+    }
     @Override protected void onStart(){
         super.onStart();
         if(!receiverRegistered){
@@ -71,16 +55,15 @@ public class MainActivity extends Activity {
         }
     }
     @Override protected void onStop(){
-        stopAutomation("الأتمتة متوقفة");
+        // Do not stop the main-thread automation loop merely because the user switched to the game.
         if(receiverRegistered){unregisterReceiver(captureReceiver);receiverRegistered=false;}
         super.onStop();
     }
-    @Override protected void onResume(){
-        super.onResume();
-        if(controlText!=null){
-            updateControlStatus();
-            automationHandler.postDelayed(this::updateControlStatus, 700);
-        }
+    @Override protected void onResume(){super.onResume();if(controlText!=null)updateControlStatus();}
+    @Override protected void onDestroy(){
+        if(isFinishing())stopAutomation("تم إغلاق التطبيق");
+        if(emergencyReceiverRegistered){try{unregisterReceiver(emergencyReceiver);}catch(Exception ignored){}emergencyReceiverRegistered=false;}
+        super.onDestroy();
     }
     @Override public void onBackPressed(){stopAutomation("تم إيقاف الأتمتة");super.onBackPressed();}
 
@@ -95,13 +78,14 @@ public class MainActivity extends Activity {
         statusText=card("تحليل الشاشة: متوقف");controlText=card("التحكم: جارٍ التحقق من الصلاحية");
         page.addView(statusText,match());page.addView(controlText,match());
         addButton(page,"تفعيل صلاحية التحكم",()->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)),true);
+        addButton(page,"إظهار لوحة الرادار العائمة",this::showOverlay,false);
 
         page.addView(section("مسجّل الحركات"));
         recorderStatus=card("جاهز للتسجيل. فعّل خدمة إمكانية الوصول أولاً.");page.addView(recorderStatus,match());
         addButton(page,"●  بدء تسجيل حركاتي",this::startRecording,true);
         stopRecordingButton=addButton(page,"■  إيقاف التسجيل وحفظه",()->{
             String saved=TouchRecorder.stopAndSave(this);
-            recorderStatus.setText(saved.isEmpty()?"لم تُحفظ حركات. تحقق من وصول أحداث اللمس أثناء التسجيل.":"تم حفظ التسجيل: "+saved);
+            recorderStatus.setText(saved.isEmpty()?"لم تُحفظ حركات.":"تم حفظ التسجيل: "+saved);
         },false);
         addButton(page,"مكتبة التسجيلات وإدارتها",this::showRecordings,false);
         addButton(page,"تشغيل آخر تسجيل",()->{
@@ -129,14 +113,11 @@ public class MainActivity extends Activity {
             statusText.setText(ok?"تم إرسال السحب التجريبي":"تعذر إرسال السحب؛ تحقق من الصلاحية");
         },false);
 
-        page.addView(section("التسلسل التلقائي"));
-        page.addView(card("الإحداثيات كنسبة مئوية من الشاشة (0–100). اضبطها حسب مواضع أزرار لعبتك."),match());
-        moveX=addNumber(page,"مركز عصا الحركة X","10");moveY=addNumber(page,"مركز عصا الحركة Y","82");
-        moveToX=addNumber(page,"اتجاه الحركة X","18");moveToY=addNumber(page,"اتجاه الحركة Y","82");
-        punchX=addNumber(page,"زر الضرب X","84");punchY=addNumber(page,"زر الضرب Y","65");
-        jumpX=addNumber(page,"زر القفز X","91");jumpY=addNumber(page,"زر القفز Y","78");
-        autoText=card("الأتمتة متوقفة");page.addView(autoText,match());
-        addButton(page,"تشغيل التسلسل التلقائي",this::startAutomation,true);
+        page.addView(section("اللعب التلقائي التكيفي"));
+        page.addView(card("ملف تحكم RIO RISE مأخوذ من لقطة لعبك الأفقية، ويُكيّف الإحداثيات تلقائياً مع دقة الشاشة. القيادة تعتمد على رصد أشرطة صحة الأعداء الحمراء."),match());
+        page.addView(card("ملف التحكم: عصا الحركة 37.1% / 94.7% • الضرب 83.6% / 67.4% • الركض 90.2% / 81.4%. الإحداثيات تُكيّف مع دقة الشاشة الأفقية."),match());
+        autoText=card("القيادة متوقفة — ابدأ تحليل الشاشة أولاً");page.addView(autoText,match());
+        addButton(page,"تشغيل اللعب التلقائي التكيفي",this::startAutomation,true);
         addButton(page,"إيقاف فوري للطوارئ",()->stopAutomation("تم الإيقاف يدوياً"),false);
 
         TextView note=label("ملاحظة: دقة التسجيل تعتمد على إصدار أندرويد والشركة المصنّعة وإمكانية وصول أحداث اللمس. قد لا تُلتقط بعض الإيماءات أو اللمسات المتعددة.",12,MUTED,false);
@@ -144,41 +125,41 @@ public class MainActivity extends Activity {
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(page);setContentView(scroll);updateControlStatus();
     }
 
-    private void startRecording(){
-        if (TouchRecorder.isRecording()) {
-            recorderStatus.setText("التسجيل يعمل بالفعل.");
+    private boolean isInsideStopButton(float x,float y){
+        if(stopRecordingButton==null||stopRecordingButton.getWidth()==0)return false;
+        int[] p=new int[2];stopRecordingButton.getLocationOnScreen(p);
+        return x>=p[0]&&x<=p[0]+stopRecordingButton.getWidth()&&y>=p[1]&&y<=p[1]+stopRecordingButton.getHeight();
+    }
+    @Override public boolean dispatchTouchEvent(android.view.MotionEvent e){
+        if(e==null)return super.dispatchTouchEvent(e);
+        int action=e.getActionMasked();
+        if(action==android.view.MotionEvent.ACTION_DOWN)ignoringStopButtonTouch=isInsideStopButton(e.getRawX(),e.getRawY());
+        if(!ignoringStopButtonTouch&&TouchRecorder.isRecording()){
+            android.view.MotionEvent copy=android.view.MotionEvent.obtain(e);
+            copy.offsetLocation(e.getRawX()-e.getX(),e.getRawY()-e.getY());
+            TouchRecorder.onMotionEvent(copy);copy.recycle();
+        }
+        boolean handled=super.dispatchTouchEvent(e);
+        if(action==android.view.MotionEvent.ACTION_UP||action==android.view.MotionEvent.ACTION_CANCEL)ignoringStopButtonTouch=false;
+        return handled;
+    }
+
+    private void showOverlay(){
+        if(Build.VERSION.SDK_INT>=23 && !Settings.canDrawOverlays(this)){
+            Intent permission=new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:"+getPackageName()));
+            startActivity(permission);
+            toast("اسمح لـ RIOAgent بالظهور فوق التطبيقات ثم اضغط الزر مرة أخرى");
             return;
         }
-        TouchRecorder.start(screenWidth(), screenHeight());
-        recorderStatus.setText("التسجيل يعمل داخل RIOAgent. لن يسجل لمس التطبيقات الأخرى.");
+        Intent overlay=new Intent(this,OverlayService.class);
+        if(Build.VERSION.SDK_INT>=26)startForegroundService(overlay);else startService(overlay);
+        toast("تم إظهار لوحة الرادار العائمة");
     }
 
-    private boolean isInsideStopButton(float x,float y) {
-        if(stopRecordingButton==null || stopRecordingButton.getWidth()==0)return false;
-        int[] pos=new int[2];
-        stopRecordingButton.getLocationOnScreen(pos);
-        return x>=pos[0] && x<=pos[0]+stopRecordingButton.getWidth()
-            && y>=pos[1] && y<=pos[1]+stopRecordingButton.getHeight();
-    }
-
-    @Override
-    public boolean dispatchTouchEvent(android.view.MotionEvent event) {
-        if(event==null)return super.dispatchTouchEvent(event);
-        int action=event.getActionMasked();
-        if(action==android.view.MotionEvent.ACTION_DOWN)
-            ignoringStopButtonTouch=isInsideStopButton(event.getRawX(),event.getRawY());
-
-        if(!ignoringStopButtonTouch && TouchRecorder.isRecording()) {
-            android.view.MotionEvent copy=android.view.MotionEvent.obtain(event);
-            copy.offsetLocation(event.getRawX()-event.getX(),event.getRawY()-event.getY());
-            TouchRecorder.onMotionEvent(copy);
-            copy.recycle();
-        }
-
-        boolean handled=super.dispatchTouchEvent(event);
-        if(action==android.view.MotionEvent.ACTION_UP || action==android.view.MotionEvent.ACTION_CANCEL)
-            ignoringStopButtonTouch=false;
-        return handled;
+    private void startRecording(){
+        if(TouchRecorder.isRecording()){recorderStatus.setText("التسجيل يعمل بالفعل.");return;}
+        TouchRecorder.start(screenWidth(),screenHeight());
+        recorderStatus.setText("● التسجيل جارٍ داخل RIOAgent فقط. لا يستطيع Android تسجيل لمس التطبيقات الأخرى بهذه الصلاحيات.");
     }
     private void showRecordings(){
         java.util.ArrayList<TouchRecorder.RecordingInfo> list=TouchRecorder.listRecordings(this);
@@ -205,35 +186,27 @@ public class MainActivity extends Activity {
             .setPositiveButton("حفظ",(d,w)->toast(TouchRecorder.rename(this,oldName,input.getText().toString())?"تم تغيير الاسم":"تعذر تغيير الاسم؛ الاسم مستخدم أو غير صالح")).show();
     }
 
-    private EditText addNumber(LinearLayout page,String title,String value){
-        page.addView(label(title,13,MUTED,true),match());
-        EditText field=new EditText(this);field.setSingleLine(true);
-        field.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        field.setText(value);field.setTextColor(WHITE);field.setTextSize(16);field.setPadding(dp(12),0,dp(12),0);
-        field.setBackground(round(PANEL2,dp(10)));LinearLayout.LayoutParams p=match();p.height=dp(48);page.addView(field,p);return field;
-    }
-    private float[] point(EditText x,EditText y){
-        float a=Float.parseFloat(x.getText().toString().trim()),b=Float.parseFloat(y.getText().toString().trim());
-        if(a<0||a>100||b<0||b>100)throw new IllegalArgumentException("القيم يجب أن تكون بين 0 و100");
-        return new float[]{screenWidth()*a/100f,screenHeight()*b/100f};
-    }
     private void startAutomation(){
         if(!GameControlService.isReady()){autoText.setText("فعّل خدمة إمكانية الوصول أولاً");return;}
+        float aspect=screenWidth()/(float)Math.max(1,screenHeight());
+        if(aspect<1.75f){autoText.setText("أدر الهاتف إلى الوضع الأفقي قبل تشغيل القيادة.");return;}
         if(autoRunning)return;
-        try{point(moveX,moveY);point(moveToX,moveToY);point(punchX,punchY);point(jumpX,jumpY);
-            autoRunning=true;autoCycles=0;autoText.setText("بدأ التسلسل — راقب الشاشة واضغط إيقاف للطوارئ");automationHandler.post(autoStep);
-        }catch(Exception e){autoText.setText("تحقق من الإحداثيات: "+e.getMessage());}
-    }
-    private void stopAutomation(String reason){autoRunning=false;automationHandler.removeCallbacksAndMessages(null);if(autoText!=null)autoText.setText(reason);}
-    private void updateControlStatus(){
-        if(GameControlService.isReady()){
-            controlText.setText("التحكم: الخدمة متصلة وجاهزة");
-        }else if(GameControlService.isAccessibilityEnabled(this)){
-            controlText.setText("الصلاحية مفعّلة في Android، لكن الخدمة لم تتصل بعد. انتظر قليلاً أو أعد فتح التطبيق.");
-        }else{
-            controlText.setText("التحكم: صلاحية إمكانية الوصول غير مفعّلة");
+        AgentConfig.controlsCalibrated=true;
+        if(CaptureService.isActive()){
+            AgentConfig.autoEnabled=true;autoRunning=true;
+            autoText.setText("القيادة التكيفية نشطة: تتبع الهدف وتغيّر الحركة والضرب والركض حسب الرصد.");
+            return;
         }
+        pendingAutoStart=true;
+        MediaProjectionManager manager=(MediaProjectionManager)getSystemService(MEDIA_PROJECTION_SERVICE);
+        startActivityForResult(manager.createScreenCaptureIntent(),REQUEST_CAPTURE);
+        autoText.setText("بانتظار موافقتك على مشاركة الشاشة لبدء اللعب التلقائي.");
     }
+    private void stopAutomation(String reason){
+        autoRunning=false;pendingAutoStart=false;AgentConfig.autoEnabled=false;
+        GameControlService.stopContinuous();if(autoText!=null)autoText.setText(reason);
+    }
+    private void updateControlStatus(){controlText.setText(GameControlService.isReady()?"التحكم: مفعّل وجاهز":"التحكم: غير مفعّل — افتح إعدادات إمكانية الوصول");}
     private int screenWidth(){return getResources().getDisplayMetrics().widthPixels;}
     private int screenHeight(){return getResources().getDisplayMetrics().heightPixels;}
     private TextView section(String s){TextView v=label(s,18,CYAN,true);v.setPadding(0,dp(20),0,dp(8));return v;}
@@ -242,8 +215,7 @@ public class MainActivity extends Activity {
     private Button addButton(LinearLayout page,String text,Runnable action,boolean primary){
         Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(14);b.setTextColor(primary?0xFF06151F:WHITE);
         b.setBackground(round(primary?CYAN:PANEL2,dp(12)));b.setOnClickListener(v->action.run());
-        LinearLayout.LayoutParams p=match();p.height=dp(52);page.addView(b,p);
-        return b;
+        LinearLayout.LayoutParams p=match();p.height=dp(52);page.addView(b,p);return b;
     }
     private GradientDrawable round(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(radius);if(color==PANEL2)d.setStroke(dp(1),0xFF29445D);return d;}
     private LinearLayout.LayoutParams match(){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(8);return p;}
@@ -255,7 +227,8 @@ public class MainActivity extends Activity {
         if(result==RESULT_OK&&data!=null){
             Intent service=new Intent(this,CaptureService.class);service.putExtra(CaptureService.EXTRA_RESULT_CODE,result);service.putExtra(CaptureService.EXTRA_RESULT_DATA,data);
             if(Build.VERSION.SDK_INT>=26)startForegroundService(service);else startService(service);
+            if(pendingAutoStart){AgentConfig.autoEnabled=true;autoRunning=true;pendingAutoStart=false;if(autoText!=null)autoText.setText("القيادة التكيفية نشطة — انتقل إلى اللعبة، وسيستمر الرادار والتحكم بالخلفية.");}
             statusText.setText("تحليل الشاشة: تم منح الإذن، بانتظار أول إطار...");
-        }else statusText.setText("لم تتم الموافقة على التقاط الشاشة");
+        }else{pendingAutoStart=false;statusText.setText("لم تتم الموافقة على التقاط الشاشة");if(autoText!=null)autoText.setText("تم إلغاء تشغيل اللعب التلقائي.");}
     }
 }

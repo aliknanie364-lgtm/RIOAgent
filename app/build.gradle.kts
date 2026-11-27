@@ -7,8 +7,8 @@ android {
         applicationId = "com.rioagent.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.8.4"
+        versionCode = 17
+        versionName = "2.2.2"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -16,6 +16,4 @@ android {
     }
 }
 
-dependencies {
-    implementation("com.google.mlkit:object-detection:17.0.2")
-}
+dependencies { }
